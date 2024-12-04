@@ -15,7 +15,11 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <FreeImage.h>
+#include <map>
+#include <filesystem>
 
+namespace fs = std::filesystem;
 
 // namespace to define values for ImGui and other parameters
 namespace values {
@@ -24,32 +28,30 @@ namespace values {
     float windowAspectRatio = 1.0f;
 }
 
-//ImGui Function
-void draw_gui(GLFWwindow* window)
-{
-    //Begin ImGui Frame
+// ImGui Function
+void draw_gui(GLFWwindow* window) {
+    // Begin ImGui Frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    //Draw Gui
+    // Draw Gui
     ImGui::Begin("Arpan Prajapati");
     ImGui::Text("CGT 520 Final Project");
     ImGui::Text("");
     ImGui::Text("Features");
     ImGui::Text("");
     ImGui::Text("Winter Theme");
-    
+
     ImGui::SliderFloat("Rotation angle", &values::angle, -glm::pi<float>(), +glm::pi<float>());
     ImGui::SliderFloat("Scale", &values::scale, -10.0f, +10.0f);
-    if (ImGui::Button("Quit"))
-    {
+    if (ImGui::Button("Quit")) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     ImGui::End();
 
-    //End ImGui Frame
+    // End ImGui Frame
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
@@ -65,7 +67,35 @@ struct Mesh {
     unsigned int VAO, VBO, EBO;
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
+    unsigned int textureID;  // To store texture ID for the mesh
 };
+
+GLuint LoadTexture(const std::string& path) {
+    FREE_IMAGE_FORMAT format = FreeImage_GetFileType(path.c_str());
+    FIBITMAP* image = FreeImage_Load(format, path.c_str());
+    if (!image) {
+        std::cerr << "ERROR::Failed to load texture: " << path << std::endl;
+        return 0;
+    }
+
+    FIBITMAP* image32bit = FreeImage_ConvertTo32Bits(image);
+    unsigned char* data = FreeImage_GetBits(image32bit);
+
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, FreeImage_GetWidth(image32bit), FreeImage_GetHeight(image32bit), 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    FreeImage_Unload(image32bit);
+    FreeImage_Unload(image);
+
+    return texture;
+}
 
 std::vector<Mesh> LoadModel(const std::string& path) {
     Assimp::Importer importer;
@@ -78,6 +108,31 @@ std::vector<Mesh> LoadModel(const std::string& path) {
     }
 
     std::vector<Mesh> meshes;
+    std::map<std::string, GLuint> textures_loaded;
+
+    // Load materials (textures are defined in MTL file)
+    for (unsigned int i = 0; i < scene->mNumMaterials; i++) {
+        aiMaterial* material = scene->mMaterials[i];
+        aiString texturePath;
+        if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
+            std::string path = texturePath.C_Str();
+
+            // Remove absolute path if present
+            size_t pos = path.find_last_of("/\\");
+            if (pos != std::string::npos) {
+                path = path.substr(pos + 1);  // Extract just the file name (e.g., 'carrot_diffuse.jpeg')
+            }
+
+            // Prepend the 'assets' folder path to the file name
+            std::string assetPath = fs::current_path().string() + "/assets/" + path;
+
+            // If texture hasn't been loaded already
+            if (textures_loaded.find(assetPath) == textures_loaded.end()) {
+                GLuint texture = LoadTexture(assetPath);  // Load texture from the assets folder
+                textures_loaded[assetPath] = texture;
+            }
+        }
+    }
 
     for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
         aiMesh* mesh = scene->mMeshes[i];
@@ -137,9 +192,16 @@ std::vector<Mesh> LoadModel(const std::string& path) {
 
         glBindVertexArray(0);
 
+        // Assign texture to mesh
+        aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+        aiString texturePath;
+        if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
+            std::string path = texturePath.C_Str();
+            myMesh.textureID = textures_loaded[path];
+        }
+
         meshes.push_back(myMesh);
         std::cout << "Mesh vertices: " << myMesh.vertices.size() << std::endl;
-
     }
 
     return meshes;
@@ -170,6 +232,7 @@ static ShaderProgramSource ParseShader(const std::string& filepath) {
             ss[(int)type] << line << '\n';
         }
     }
+
     return { ss[0].str(), ss[1].str() };
 }
 
@@ -186,8 +249,7 @@ static unsigned int CompileShader(unsigned int type, const std::string& source) 
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
         char* message = (char*)alloca(length * sizeof(char));
         glGetShaderInfoLog(id, length, &length, message);
-        std::cout << "Failed to compile " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader\n";
-        std::cout << message << std::endl;
+        std::cerr << "Failed to compile shader\n" << message << std::endl;
         glDeleteShader(id);
         return 0;
     }
@@ -222,21 +284,23 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     std::cout << "frame size changed!" << std::endl;
 }
 
-// main method
 int main() {
-    // Initialize GLFW
-    if (!glfwInit()) return -1;
-
-    GLFWwindow* window = glfwCreateWindow(1024, 1024, "Arpan Final Project CGT 520", nullptr, nullptr);
-    if (!window) {
-        glfwTerminate();
+    if (!glfwInit()) {
+        std::cerr << "ERROR::GLFW::INIT_FAILED" << std::endl;
         return -1;
     }
 
+    GLFWwindow* window = glfwCreateWindow(1024, 1024, "Arpan Prajapati CGT 520", NULL, NULL);
+    if (!window) {
+        std::cerr << "ERROR::GLFW::WINDOW_CREATION_FAILED" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
 
     if (glewInit() != GLEW_OK) {
-        std::cerr << "Error initializing GLEW\n";
+        std::cerr << "ERROR::GLEW::INIT_FAILED" << std::endl;
         return -1;
     }
 
@@ -257,7 +321,7 @@ int main() {
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
-
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(shader);
@@ -270,11 +334,15 @@ int main() {
         glm::mat4 R = glm::rotate(values::angle, glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 S = glm::scale(glm::vec3(values::scale * 1.0f));
 
+        draw_gui(window);
+
         glm::mat4 model = T * R * S;
         glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), values::windowAspectRatio, 0.1f, 100.0f);
 
+        // Render all meshes
         glUseProgram(shader);
+
         glUniformMatrix4fv(glGetUniformLocation(shader, "uModel"), 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(glGetUniformLocation(shader, "uView"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(shader, "uProjection"), 1, GL_FALSE, glm::value_ptr(projection));
@@ -284,23 +352,34 @@ int main() {
         glUniform3f(glGetUniformLocation(shader, "uLightColor"), 1.0f, 1.0f, 1.0f);
         glUniform3f(glGetUniformLocation(shader, "uObjectColor"), 1.0f, 0.5f, 0.31f);
 
-        for (const auto& mesh : meshes) {
-            glBindVertexArray(mesh.VAO);
-            glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
-        }
+        for (auto & mesh : meshes) {
 
-        draw_gui(window);
+            std::cout << "Rendering mesh with texture ID: " << mesh.textureID << std::endl;
+            // Bind the VAO for the mesh
+            glBindVertexArray(mesh.VAO);
+
+            // Activate and bind the texture for this mesh
+            glActiveTexture(GL_TEXTURE0); // Activate texture unit 0
+            glBindTexture(GL_TEXTURE_2D, mesh.textureID);
+
+            // Pass the texture unit to the shader sampler
+            glUniform1i(glGetUniformLocation(shader, "texture1"), 0);
+
+            // Draw the mesh
+            glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+
+            // Unbind the VAO (optional for clarity)
+            glBindVertexArray(0);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
     glDeleteProgram(shader);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-
     glfwTerminate();
     return 0;
 }

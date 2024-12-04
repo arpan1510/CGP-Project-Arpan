@@ -25,42 +25,14 @@ void main() {
 #shader fragment
 #version 330 core
 
-in vec3 vNormal;        // Interpolated normal from the vertex shader
-in vec2 vTexCoords;     // Interpolated texture coordinates from the vertex shader
-in vec3 vFragPosition;  // Fragment position in world space
+in vec2 vTexCoords;      // Texture coordinates from vertex shader
 
-out vec4 FragColor;
+out vec4 FragColor;     // Output color of the fragment
 
-uniform sampler2D uTexture;  // Texture sampler
-uniform vec3 uLightPos;      // Position of the light source
-uniform vec3 uViewPos;       // Position of the camera/viewer
-uniform vec3 uLightColor;    // Color of the light
-uniform vec3 uObjectColor;   // Base color of the object (used if no texture)
+uniform sampler2D texture1;  // Texture sampler
 
-void main() {
-    // Ambient lighting
-    float ambientStrength = 0.1;
-    vec3 ambient = ambientStrength * uLightColor;
-
-    // Diffuse lighting
-    vec3 norm = normalize(vNormal);
-    vec3 lightDir = normalize(uLightPos - vFragPosition);
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * uLightColor;
-
-    // Specular lighting
-    float specularStrength = 0.5;
-    vec3 viewDir = normalize(uViewPos - vFragPosition);
-    vec3 reflectDir = reflect(-lightDir, norm);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-    vec3 specular = specularStrength * spec * uLightColor;
-
-    // Combine all components
-    vec3 lighting = (ambient + diffuse + specular);
-
-    // Sample texture color and apply lighting
-    vec4 texColor = texture(uTexture, vTexCoords);
-    vec3 finalColor = (texColor.rgb * lighting) * uObjectColor;
-
-    FragColor = vec4(1.0, 0.0, 0.0, 1.0); // Use texture alpha for transparency
+void main()
+{
+    // Simply use the texture color based on the texture coordinates
+    FragColor = texture(texture1, vTexCoords);
 }

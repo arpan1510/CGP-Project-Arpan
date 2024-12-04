@@ -114,6 +114,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>USER_NAME="$(UserName)";SOLUTION_NAME="$(SolutionName)";PROJECT_NAME="$(ProjectName)";NOMINMAX;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,6 +139,7 @@ xcopy /Y "$(ProjectDir)assets\*" "$(ProjectDir)dist\assets\"</Command>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>USER_NAME="$(UserName)";SOLUTION_NAME="$(SolutionName)";PROJECT_NAME="$(ProjectName)";NOMINMAX;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
