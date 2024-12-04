@@ -16,11 +16,15 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
+
+// namespace to define values for ImGui and other parameters
 namespace values {
     float angle = 0.0f;
     float scale = 1.0f;
+    float windowAspectRatio = 1.0f;
 }
 
+//ImGui Function
 void draw_gui(GLFWwindow* window)
 {
     //Begin ImGui Frame
@@ -29,14 +33,19 @@ void draw_gui(GLFWwindow* window)
     ImGui::NewFrame();
 
     //Draw Gui
-    ImGui::Begin("Debug window");
+    ImGui::Begin("Arpan Prajapati");
+    ImGui::Text("CGT 520 Final Project");
+    ImGui::Text("");
+    ImGui::Text("Features");
+    ImGui::Text("");
+    ImGui::Text("Winter Theme");
+    
+    ImGui::SliderFloat("Rotation angle", &values::angle, -glm::pi<float>(), +glm::pi<float>());
+    ImGui::SliderFloat("Scale", &values::scale, -10.0f, +10.0f);
     if (ImGui::Button("Quit"))
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
-    ImGui::SliderFloat("Rotation angle", &values::angle, -glm::pi<float>(), +glm::pi<float>());
-    ImGui::SliderFloat("Scale", &values::scale, -10.0f, +10.0f);
-
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     ImGui::End();
 
@@ -45,12 +54,7 @@ void draw_gui(GLFWwindow* window)
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-// Shader parsing structure
-struct ShaderProgramSource {
-    std::string VertexSource;
-    std::string FragmentSource;
-};
-
+// Importing 3D Obj File Parameters
 struct Vertex {
     float Position[3];
     float Normal[3];
@@ -141,7 +145,11 @@ std::vector<Mesh> LoadModel(const std::string& path) {
     return meshes;
 }
 
-
+// Linking Shader Files
+struct ShaderProgramSource {
+    std::string VertexSource;
+    std::string FragmentSource;
+};
 
 static ShaderProgramSource ParseShader(const std::string& filepath) {
     std::ifstream stream(filepath);
@@ -203,23 +211,36 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
     return program;
 }
 
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 
+    glViewport(0, 0, width, height);
+    if (height == 0)
+    {
+        height = 1;
+    }
+    values::windowAspectRatio = (float)width / (float)height;
+    std::cout << "frame size changed!" << std::endl;
+}
 
+// main method
 int main() {
     // Initialize GLFW
     if (!glfwInit()) return -1;
 
-    GLFWwindow* window = glfwCreateWindow(800, 600, "OBJ Model Viewer", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1024, 1024, "Arpan Final Project CGT 520", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return -1;
     }
 
     glfwMakeContextCurrent(window);
+
     if (glewInit() != GLEW_OK) {
         std::cerr << "Error initializing GLEW\n";
         return -1;
     }
+
+    glfwSetWindowSizeCallback(window, framebuffer_size_callback);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -233,10 +254,6 @@ int main() {
     // Prepare shaders
     ShaderProgramSource source = ParseShader("shaders/shader_final.glsl");
     unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
-
-    
-
-    
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -255,7 +272,7 @@ int main() {
 
         glm::mat4 model = T * R * S;
         glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), values::windowAspectRatio, 0.1f, 100.0f);
 
         glUseProgram(shader);
         glUniformMatrix4fv(glGetUniformLocation(shader, "uModel"), 1, GL_FALSE, glm::value_ptr(model));
@@ -267,11 +284,6 @@ int main() {
         glUniform3f(glGetUniformLocation(shader, "uLightColor"), 1.0f, 1.0f, 1.0f);
         glUniform3f(glGetUniformLocation(shader, "uObjectColor"), 1.0f, 0.5f, 0.31f);
 
-        // Optionally update view matrix if camera moves
-        // view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        // glUniformMatrix4fv(glGetUniformLocation(shader, "uView"), 1, GL_FALSE, glm::value_ptr(view));
-
-        // Render your OBJ model here (using the VAO/VBO setup from Assimp model loading code)
         for (const auto& mesh : meshes) {
             glBindVertexArray(mesh.VAO);
             glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
