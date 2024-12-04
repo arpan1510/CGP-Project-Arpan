@@ -22,12 +22,121 @@
 
 namespace fs = std::filesystem;
 
+
 // namespace to define values for ImGui and other parameters
 namespace values {
     float angle = 0.0f;
     float scale = 1.0f;
     float windowAspectRatio = 1.0f;
 }
+
+glm::vec3 position(0.0f, 2.5f, 10.0f);  // Camera position
+glm::vec3 front(0.0f, 0.0f, -1.0f);     // Camera front vector
+glm::vec3 up(0.0f, 1.0f, 0.0f);        // Camera up vector
+glm::vec3 right;                       // Camera right vector (calculated dynamically)
+
+float yaw = -90.0f;                    // Horizontal rotation
+float pitch = 0.0f;                    // Vertical rotation
+float movementSpeed = 2.5f;            // Movement speed (scale with deltaTime)
+float mouseSensitivity = 0.1f;         // Mouse sensitivity
+float lastX = 800.0f / 2.0f;           // Last mouse position
+float lastY = 600.0f / 2.0f;           // Last mouse position
+bool firstMouse = true;                // Flag to prevent jumping to center on first move
+float deltaTime = 0.0f;                // Delta time between frames
+float lastFrame = 0.0f;                // Last frame time
+
+// Movement state flags
+bool moveForward = false;
+bool moveBackward = false;
+bool moveLeft = false;
+bool moveRight = false;
+
+// Function to process input with keyboard callback
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_W)
+            moveForward = true;
+        if (key == GLFW_KEY_S)
+            moveBackward = true;
+        if (key == GLFW_KEY_A)
+            moveLeft = true;
+        if (key == GLFW_KEY_D)
+            moveRight = true;
+    }
+    if (action == GLFW_RELEASE) {
+        if (key == GLFW_KEY_W)
+            moveForward = false;
+        if (key == GLFW_KEY_S)
+            moveBackward = false;
+        if (key == GLFW_KEY_A)
+            moveLeft = false;
+        if (key == GLFW_KEY_D)
+            moveRight = false;
+    }
+}
+
+// Function to process camera movement based on input flags
+void processCameraMovement(float deltaTime) {
+    float velocity = movementSpeed * deltaTime;
+
+    // Only update the x and z position to keep y constant
+    if (moveForward) {
+        position.x += front.x * velocity;  // Move along x based on front direction
+        position.z += front.z * velocity;  // Move along z based on front direction
+    }
+    if (moveBackward) {
+        position.x -= front.x * velocity;  // Move along x based on front direction
+        position.z -= front.z * velocity;  // Move along z based on front direction
+    }
+    if (moveLeft) {
+        position.x -= right.x * velocity;  // Move left along x based on right direction
+        position.z -= right.z * velocity;  // Move left along z based on right direction
+    }
+    if (moveRight) {
+        position.x += right.x * velocity;  // Move right along x based on right direction
+        position.z += right.z * velocity;  // Move right along z based on right direction
+    }
+}
+
+// Mouse movement callback function
+void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+    if (firstMouse) {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos;  // Reversed because y-coordinates go from bottom to top in OpenGL
+    lastX = xpos;
+    lastY = ypos;
+
+    xoffset *= mouseSensitivity;
+    yoffset *= mouseSensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    // Clamp the pitch to prevent flipping
+    if (pitch > 89.0f) pitch = 89.0f;
+    if (pitch < -89.0f) pitch = -89.0f;
+
+    // Update the front vector (yaw affects left-right movement, pitch affects up-down)
+    glm::vec3 newFront;
+    newFront.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));   // Horizontal direction
+    newFront.y = sin(glm::radians(pitch));  // Vertical direction (pitch)
+    newFront.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));   // Horizontal direction
+
+    front = glm::normalize(newFront);
+    right = glm::normalize(glm::cross(front, up));  // Right vector is perpendicular to front and up
+}
+
+void calculateDeltaTime() {
+    float currentFrame = glfwGetTime();
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
+}
+
 
 // ImGui Function
 void draw_gui(GLFWwindow* window) {
@@ -327,6 +436,8 @@ int main() {
     }
 
     glfwSetWindowSizeCallback(window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);  
+    glfwSetKeyCallback(window, key_callback);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -343,6 +454,9 @@ int main() {
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
+        calculateDeltaTime();  // Calculate deltaTime for smooth movement
+
+        processCameraMovement(deltaTime);  // Move the camera based on input flags
         glClearColor(0.0f, 0.0f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -359,7 +473,7 @@ int main() {
         draw_gui(window);
 
         glm::mat4 model = T * R * S;
-        glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 view = glm::lookAt(position, position + front, up);
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), values::windowAspectRatio, 0.1f, 100.0f);
 
         // Render all meshes
