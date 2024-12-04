@@ -1,80 +1,193 @@
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <vector>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
-struct ShaderProgramSource
+namespace values {
+    float angle = 0.0f;
+    float scale = 1.0f;
+}
+
+void draw_gui(GLFWwindow* window)
 {
+    //Begin ImGui Frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    //Draw Gui
+    ImGui::Begin("Debug window");
+    if (ImGui::Button("Quit"))
+    {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+    ImGui::SliderFloat("Rotation angle", &values::angle, -glm::pi<float>(), +glm::pi<float>());
+    ImGui::SliderFloat("Scale", &values::scale, -10.0f, +10.0f);
+
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    ImGui::End();
+
+    //End ImGui Frame
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+// Shader parsing structure
+struct ShaderProgramSource {
     std::string VertexSource;
     std::string FragmentSource;
 };
 
-static ShaderProgramSource ParseShader(const std::string& filepath)
-{
+struct Vertex {
+    float Position[3];
+    float Normal[3];
+    float TexCoords[2];
+};
+
+struct Mesh {
+    unsigned int VAO, VBO, EBO;
+    std::vector<Vertex> vertices;
+    std::vector<unsigned int> indices;
+};
+
+std::vector<Mesh> LoadModel(const std::string& path) {
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(path,
+        aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+        std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+        throw std::runtime_error("Failed to load model.");
+    }
+
+    std::vector<Mesh> meshes;
+
+    for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
+        aiMesh* mesh = scene->mMeshes[i];
+        Mesh myMesh;
+
+        // Process vertices
+        for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
+            Vertex vertex;
+            vertex.Position[0] = mesh->mVertices[j].x;
+            vertex.Position[1] = mesh->mVertices[j].y;
+            vertex.Position[2] = mesh->mVertices[j].z;
+
+            vertex.Normal[0] = mesh->mNormals[j].x;
+            vertex.Normal[1] = mesh->mNormals[j].y;
+            vertex.Normal[2] = mesh->mNormals[j].z;
+
+            if (mesh->mTextureCoords[0]) {
+                vertex.TexCoords[0] = mesh->mTextureCoords[0][j].x;
+                vertex.TexCoords[1] = mesh->mTextureCoords[0][j].y;
+            }
+            else {
+                vertex.TexCoords[0] = 0.0f;
+                vertex.TexCoords[1] = 0.0f;
+            }
+            myMesh.vertices.push_back(vertex);
+        }
+
+        // Process indices
+        for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
+            aiFace face = mesh->mFaces[j];
+            for (unsigned int k = 0; k < face.mNumIndices; k++) {
+                myMesh.indices.push_back(face.mIndices[k]);
+            }
+        }
+
+        // Generate OpenGL buffers
+        glGenVertexArrays(1, &myMesh.VAO);
+        glGenBuffers(1, &myMesh.VBO);
+        glGenBuffers(1, &myMesh.EBO);
+
+        glBindVertexArray(myMesh.VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, myMesh.VBO);
+        glBufferData(GL_ARRAY_BUFFER, myMesh.vertices.size() * sizeof(Vertex), myMesh.vertices.data(), GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, myMesh.EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, myMesh.indices.size() * sizeof(unsigned int), myMesh.indices.data(), GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Position));
+        glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+        glEnableVertexAttribArray(1);
+
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+        glEnableVertexAttribArray(2);
+
+        glBindVertexArray(0);
+
+        meshes.push_back(myMesh);
+        std::cout << "Mesh vertices: " << myMesh.vertices.size() << std::endl;
+
+    }
+
+    return meshes;
+}
+
+
+
+static ShaderProgramSource ParseShader(const std::string& filepath) {
     std::ifstream stream(filepath);
-
-    enum class ShaderType
-    {
-        NONE = -1, VERTEX = 0, FRAGMENT = 1
-    };
-
-    std::string line;
     std::stringstream ss[2];
-    ShaderType type = ShaderType::NONE;
+    std::string line;
+    enum class ShaderType { NONE = -1, VERTEX = 0, FRAGMENT = 1 } type = ShaderType::NONE;
 
-    while (getline(stream, line))
-    {
-        if (line.find("#shader") != std::string::npos)
-        {
-            if (line.find("vertex") != std::string::npos)
-            {
+    while (getline(stream, line)) {
+        if (line.find("#shader") != std::string::npos) {
+            if (line.find("vertex") != std::string::npos) {
                 type = ShaderType::VERTEX;
             }
-            else if (line.find("fragment") != std::string::npos)
-            {
+            else if (line.find("fragment") != std::string::npos) {
                 type = ShaderType::FRAGMENT;
             }
         }
-        else
-        {
+        else {
             ss[(int)type] << line << '\n';
         }
     }
-    return{ ss[0].str(),ss[1].str() };
+    return { ss[0].str(), ss[1].str() };
 }
 
-    
-
-static unsigned int CompileShader(unsigned int type, const std::string& source)
-{
+static unsigned int CompileShader(unsigned int type, const std::string& source) {
     unsigned int id = glCreateShader(type);
     const char* src = source.c_str();
     glShaderSource(id, 1, &src, nullptr);
     glCompileShader(id);
 
-
     int result;
     glGetShaderiv(id, GL_COMPILE_STATUS, &result);
-    if (result == GL_FALSE)
-    {
+    if (result == GL_FALSE) {
         int length;
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
         char* message = (char*)alloca(length * sizeof(char));
         glGetShaderInfoLog(id, length, &length, message);
-        std::cout << "Failed to compile" << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << "shader" << std::endl;
+        std::cout << "Failed to compile " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader\n";
         std::cout << message << std::endl;
         glDeleteShader(id);
         return 0;
     }
 
-
     return id;
 }
 
-static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader)
-{
+static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader) {
     unsigned int program = glCreateProgram();
     unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
     unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
@@ -91,71 +204,91 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
 }
 
 
-int main()
-{
-    GLFWwindow* window;
 
-    /* Initialize the library */
-    if (!glfwInit())
-        return -1;
+int main() {
+    // Initialize GLFW
+    if (!glfwInit()) return -1;
 
-    /* Create a windowed mode window and its OpenGL context */
-    window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
-    if (!window)
-    {
+    GLFWwindow* window = glfwCreateWindow(800, 600, "OBJ Model Viewer", nullptr, nullptr);
+    if (!window) {
         glfwTerminate();
         return -1;
     }
 
-    /* Make the window's context current */
     glfwMakeContextCurrent(window);
-
-    if (glewInit() != GLEW_OK);
-    {
-        std::cout << glewGetErrorString(glGetError()) << std::endl;
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "Error initializing GLEW\n";
+        return -1;
     }
-    float position[6] = {
-        -0.5f, -0.5f,
-        0.0f, 0.5f,
-        0.5f, -0.5f
-    };
 
-    unsigned int buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, 6 * sizeof(float), position, GL_STATIC_DRAW);
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 150");
 
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
+    glEnable(GL_DEPTH_TEST);
 
+    std::vector<Mesh> meshes = LoadModel("assets/snowman.obj");
+
+    // Prepare shaders
     ShaderProgramSource source = ParseShader("shaders/shader_final.glsl");
-    std::cout << "VERTEX" << std::endl;
-    std::cout << source.VertexSource << std::endl;
-    std::cout << "FRAGMENT" << std::endl;
-    std::cout << source.FragmentSource << std::endl;
-
     unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
-    glUseProgram(shader);
 
-    /* Loop until the user closes the window */
-    while (!glfwWindowShouldClose(window))
-    {
-        /* Render here */
-        glClear(GL_COLOR_BUFFER_BIT);
+    
 
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+    
 
-        /* Swap front and back buffers */
+    // Main loop
+    while (!glfwWindowShouldClose(window)) {
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glUseProgram(shader);
+
+        // Pass uniforms to the shader program
+        glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
+        glm::vec3 cameraPos(0.0f, 0.0f, 10.0f);
+
+        glm::mat4 T = glm::translate(glm::vec3(0.0f, 0.0f, 0.0f));
+        glm::mat4 R = glm::rotate(values::angle, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 S = glm::scale(glm::vec3(values::scale * 1.0f));
+
+        glm::mat4 model = T * R * S;
+        glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+
+        glUseProgram(shader);
+        glUniformMatrix4fv(glGetUniformLocation(shader, "uModel"), 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(glGetUniformLocation(shader, "uView"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(shader, "uProjection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+        glUniform3fv(glGetUniformLocation(shader, "uLightPos"), 1, glm::value_ptr(lightPos));
+        glUniform3fv(glGetUniformLocation(shader, "uViewPos"), 1, glm::value_ptr(cameraPos));
+        glUniform3f(glGetUniformLocation(shader, "uLightColor"), 1.0f, 1.0f, 1.0f);
+        glUniform3f(glGetUniformLocation(shader, "uObjectColor"), 1.0f, 0.5f, 0.31f);
+
+        // Optionally update view matrix if camera moves
+        // view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        // glUniformMatrix4fv(glGetUniformLocation(shader, "uView"), 1, GL_FALSE, glm::value_ptr(view));
+
+        // Render your OBJ model here (using the VAO/VBO setup from Assimp model loading code)
+        for (const auto& mesh : meshes) {
+            glBindVertexArray(mesh.VAO);
+            glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+        }
+
+        draw_gui(window);
+
         glfwSwapBuffers(window);
-
-        /* Poll for and process events */
         glfwPollEvents();
     }
 
     glDeleteProgram(shader);
 
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     glfwTerminate();
-
-
     return 0;
 }
