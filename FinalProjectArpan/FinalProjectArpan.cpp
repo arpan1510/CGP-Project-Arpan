@@ -18,6 +18,7 @@
 #include <FreeImage.h>
 #include <map>
 #include <filesystem>
+#include <functional>
 
 namespace fs = std::filesystem;
 
@@ -97,115 +98,133 @@ GLuint LoadTexture(const std::string& path) {
     return texture;
 }
 
+// Helper function to process individual meshes
+Mesh processMesh(aiMesh* mesh, const aiScene* scene, std::function<GLuint(const std::string&)> loadTexture) {
+    Mesh myMesh;
+
+    // Process vertices
+    for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+        Vertex vertex;
+        vertex.Position[0] = mesh->mVertices[i].x;
+        vertex.Position[1] = mesh->mVertices[i].y;
+        vertex.Position[2] = mesh->mVertices[i].z;
+
+        vertex.Normal[0] = mesh->mNormals[i].x;
+        vertex.Normal[1] = mesh->mNormals[i].y;
+        vertex.Normal[2] = mesh->mNormals[i].z;
+
+        if (mesh->mTextureCoords[0]) { // Check if the mesh has texture coordinates
+            vertex.TexCoords[0] = mesh->mTextureCoords[0][i].x;
+            vertex.TexCoords[1] = mesh->mTextureCoords[0][i].y;
+        }
+        else {
+            vertex.TexCoords[0] = 0.0f;
+            vertex.TexCoords[1] = 0.0f;
+        }
+
+        myMesh.vertices.push_back(vertex);
+    }
+
+    // Process indices
+    for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+        aiFace face = mesh->mFaces[i];
+        for (unsigned int j = 0; j < face.mNumIndices; j++) {
+            myMesh.indices.push_back(face.mIndices[j]);
+        }
+    }
+
+    // Load material and associated textures
+    aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+    aiString texturePath;
+    if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
+        std::string fullPath = (fs::current_path() / "assets" / std::string(texturePath.C_Str())).string();
+        std::cout << "Texture Path: " << fullPath << std::endl;
+        myMesh.textureID = LoadTexture(fullPath);
+        if (myMesh.textureID == 0) {
+            std::cerr << "WARNING::Texture loading failed for: " << fullPath << std::endl;
+        }
+    }
+    else {
+        std::cerr << "WARNING::Mesh has no diffuse texture!" << std::endl;
+    }
+
+    // Generate OpenGL buffers for the mesh
+    glGenVertexArrays(1, &myMesh.VAO);
+    glGenBuffers(1, &myMesh.VBO);
+    glGenBuffers(1, &myMesh.EBO);
+
+    glBindVertexArray(myMesh.VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, myMesh.VBO);
+    glBufferData(GL_ARRAY_BUFFER, myMesh.vertices.size() * sizeof(Vertex), myMesh.vertices.data(), GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, myMesh.EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, myMesh.indices.size() * sizeof(unsigned int), myMesh.indices.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Position));
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+    glEnableVertexAttribArray(1);
+
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+    glEnableVertexAttribArray(2);
+
+    glBindVertexArray(0);
+
+    return myMesh;
+}
+
+// Main LoadModel function
 std::vector<Mesh> LoadModel(const std::string& path) {
     Assimp::Importer importer;
+
+    // Import the model file
     const aiScene* scene = importer.ReadFile(path,
         aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
 
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-        std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+        std::cerr << "ERROR::ASSIMP: " << importer.GetErrorString() << std::endl;
         throw std::runtime_error("Failed to load model.");
     }
 
-    std::vector<Mesh> meshes;
-    std::map<std::string, GLuint> textures_loaded;
+    std::vector<Mesh> meshes;           // Container for all meshes
+    std::map<std::string, GLuint> textures_loaded; // Track loaded textures
 
-    // Load materials (textures are defined in MTL file)
-    for (unsigned int i = 0; i < scene->mNumMaterials; i++) {
-        aiMaterial* material = scene->mMaterials[i];
-        aiString texturePath;
-        if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-            std::string path = texturePath.C_Str();
-
-            // Remove absolute path if present
-            size_t pos = path.find_last_of("/\\");
-            if (pos != std::string::npos) {
-                path = path.substr(pos + 1);  // Extract just the file name (e.g., 'carrot_diffuse.jpeg')
-            }
-
-            // Prepend the 'assets' folder path to the file name
-            std::string assetPath = fs::current_path().string() + "/assets/" + path;
-
-            // If texture hasn't been loaded already
-            if (textures_loaded.find(assetPath) == textures_loaded.end()) {
-                GLuint texture = LoadTexture(assetPath);  // Load texture from the assets folder
-                textures_loaded[assetPath] = texture;
-            }
-        }
-    }
-
-    for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
-        aiMesh* mesh = scene->mMeshes[i];
-        Mesh myMesh;
-
-        // Process vertices
-        for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
-            Vertex vertex;
-            vertex.Position[0] = mesh->mVertices[j].x;
-            vertex.Position[1] = mesh->mVertices[j].y;
-            vertex.Position[2] = mesh->mVertices[j].z;
-
-            vertex.Normal[0] = mesh->mNormals[j].x;
-            vertex.Normal[1] = mesh->mNormals[j].y;
-            vertex.Normal[2] = mesh->mNormals[j].z;
-
-            if (mesh->mTextureCoords[0]) {
-                vertex.TexCoords[0] = mesh->mTextureCoords[0][j].x;
-                vertex.TexCoords[1] = mesh->mTextureCoords[0][j].y;
-            }
-            else {
-                vertex.TexCoords[0] = 0.0f;
-                vertex.TexCoords[1] = 0.0f;
-            }
-            myMesh.vertices.push_back(vertex);
+    // Helper lambda to load a texture from the file system
+    auto loadTexture = [&](const std::string& filePath) -> GLuint {
+        if (textures_loaded.find(filePath) != textures_loaded.end()) {
+            return textures_loaded[filePath];
         }
 
-        // Process indices
-        for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
-            aiFace face = mesh->mFaces[j];
-            for (unsigned int k = 0; k < face.mNumIndices; k++) {
-                myMesh.indices.push_back(face.mIndices[k]);
-            }
+        GLuint textureID = LoadTexture(filePath);
+        if (textureID != 0) {
+            textures_loaded[filePath] = textureID;
+        }
+        return textureID;
+        };
+
+    // Recursive function to process all nodes in the scene
+    std::function<void(aiNode*, const aiScene*)> processNode;
+    processNode = [&](aiNode* node, const aiScene* scene) {
+        // Process each mesh in the node
+        for (unsigned int i = 0; i < node->mNumMeshes; i++) {
+            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+            meshes.push_back(processMesh(mesh, scene, loadTexture));
         }
 
-        // Generate OpenGL buffers
-        glGenVertexArrays(1, &myMesh.VAO);
-        glGenBuffers(1, &myMesh.VBO);
-        glGenBuffers(1, &myMesh.EBO);
-
-        glBindVertexArray(myMesh.VAO);
-
-        glBindBuffer(GL_ARRAY_BUFFER, myMesh.VBO);
-        glBufferData(GL_ARRAY_BUFFER, myMesh.vertices.size() * sizeof(Vertex), myMesh.vertices.data(), GL_STATIC_DRAW);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, myMesh.EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, myMesh.indices.size() * sizeof(unsigned int), myMesh.indices.data(), GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Position));
-        glEnableVertexAttribArray(0);
-
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
-        glEnableVertexAttribArray(1);
-
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
-        glEnableVertexAttribArray(2);
-
-        glBindVertexArray(0);
-
-        // Assign texture to mesh
-        aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-        aiString texturePath;
-        if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-            std::string path = texturePath.C_Str();
-            myMesh.textureID = textures_loaded[path];
+        // Process each child node recursively
+        for (unsigned int i = 0; i < node->mNumChildren; i++) {
+            processNode(node->mChildren[i], scene);
         }
+        };
 
-        meshes.push_back(myMesh);
-        std::cout << "Mesh vertices: " << myMesh.vertices.size() << std::endl;
-    }
+    // Start processing from the root node
+    processNode(scene->mRootNode, scene);
 
     return meshes;
 }
+
 
 // Linking Shader Files
 struct ShaderProgramSource {
@@ -354,7 +373,7 @@ int main() {
 
         for (auto & mesh : meshes) {
 
-            std::cout << "Rendering mesh with texture ID: " << mesh.textureID << std::endl;
+            //std::cout << "Rendering mesh with texture ID: " << mesh.textureID << std::endl;
             // Bind the VAO for the mesh
             glBindVertexArray(mesh.VAO);
 
