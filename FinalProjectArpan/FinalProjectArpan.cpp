@@ -86,8 +86,8 @@ GLuint LoadTexture(const std::string& path) {
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, FreeImage_GetWidth(image32bit), FreeImage_GetHeight(image32bit), 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
     glGenerateMipmap(GL_TEXTURE_2D);
@@ -115,11 +115,14 @@ Mesh processMesh(aiMesh* mesh, const aiScene* scene, std::function<GLuint(const 
 
         if (mesh->mTextureCoords[0]) { // Check if the mesh has texture coordinates
             vertex.TexCoords[0] = mesh->mTextureCoords[0][i].x;
-            vertex.TexCoords[1] = mesh->mTextureCoords[0][i].y;
+            vertex.TexCoords[1] = 1.0f - mesh->mTextureCoords[0][i].y;
+            
+            
         }
         else {
             vertex.TexCoords[0] = 0.0f;
             vertex.TexCoords[1] = 0.0f;
+            std::cout << mesh<< "texcord absent" << std::endl;
         }
 
         myMesh.vertices.push_back(vertex);
@@ -340,14 +343,14 @@ int main() {
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(shader);
 
         // Pass uniforms to the shader program
         glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
-        glm::vec3 cameraPos(0.0f, 0.0f, 10.0f);
+        glm::vec3 cameraPos(0.0f, 2.5f, 10.0f);
 
         glm::mat4 T = glm::translate(glm::vec3(0.0f, 0.0f, 0.0f));
         glm::mat4 R = glm::rotate(values::angle, glm::vec3(0.0f, 1.0f, 0.0f));
