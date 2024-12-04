@@ -1,0 +1,4 @@
+Vendor: NVIDIA Corporation
+Renderer: NVIDIA GeForce RTX 4070 Laptop GPU/PCIe/SSE2
+Version: 4.6.0 NVIDIA 531.97
+GLSL Version: 4.60 NVIDIA

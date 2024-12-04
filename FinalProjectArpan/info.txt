@@ -1,0 +1,4 @@
+Vendor: NVIDIA Corporation
+Renderer: NVIDIA GeForce RTX 3090/PCIe/SSE2
+Version: 4.6.0 NVIDIA 536.67
+GLSL Version: 4.60 NVIDIA
