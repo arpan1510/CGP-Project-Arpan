@@ -23,13 +23,13 @@
 namespace fs = std::filesystem;
 
 
-// namespace to define values for ImGui and other parameters
-namespace values {
-    float angle = 0.0f;
-    float scale = 1.0f;
-    float windowAspectRatio = 1.0f;
-}
 
+// namespace to define values for ImGui and other functions
+int isFpp=0;
+float angle = 0.0f;
+float scale = 1.0f;
+float scale_sky = 10.0f;
+float windowAspectRatio = 1.0f;
 glm::vec3 position(0.0f, 2.5f, 10.0f);  // Camera position
 glm::vec3 front(0.0f, 0.0f, -1.0f);     // Camera front vector
 glm::vec3 up(0.0f, 1.0f, 0.0f);        // Camera up vector
@@ -51,6 +51,42 @@ bool moveBackward = false;
 bool moveLeft = false;
 bool moveRight = false;
 
+void draw_gui(GLFWwindow* window) {
+    // Begin ImGui Frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Draw Gui
+    ImGui::Begin("Arpan Prajapati");
+    ImVec4 blueColor(0.678f, 0.847f, 0.902f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, blueColor);
+    ImGui::Text("CGT 520 Final Project");
+    ImGui::PopStyleColor();
+    ImGui::Text("");
+    ImGui::Text("Features");
+    ImGui::Text("");
+    ImVec4 greenColor(0.0f, 1.0f, 0.0f, 1.0f);  
+    ImGui::PushStyleColor(ImGuiCol_Text, greenColor);
+    ImGui::Text("Feature 1 : Winter Theme");
+    ImGui::PopStyleColor();
+    ImGui::Text("Designed Winter or Christmas Theme based scene");
+
+    //ImGui::SliderFloat("Rotation angle", &angle, -glm::pi<float>(), +glm::pi<float>());
+    //ImGui::SliderFloat("Scale", &scale, -10.0f, +10.0f);
+    ImGui::RadioButton("None", &isFpp, 0); ImGui::SameLine();
+    ImGui::RadioButton("FPP", &isFpp, 1);
+    if (ImGui::Button("Quit")) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    ImGui::End();
+
+    // End ImGui Frame
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
 // Function to process input with keyboard callback
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (action == GLFW_PRESS) {
@@ -62,6 +98,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             moveLeft = true;
         if (key == GLFW_KEY_D)
             moveRight = true;
+        if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+            isFpp=0; 
+        }
     }
     if (action == GLFW_RELEASE) {
         if (key == GLFW_KEY_W)
@@ -139,32 +178,7 @@ void calculateDeltaTime() {
 
 
 // ImGui Function
-void draw_gui(GLFWwindow* window) {
-    // Begin ImGui Frame
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
 
-    // Draw Gui
-    ImGui::Begin("Arpan Prajapati");
-    ImGui::Text("CGT 520 Final Project");
-    ImGui::Text("");
-    ImGui::Text("Features");
-    ImGui::Text("");
-    ImGui::Text("Winter Theme");
-
-    ImGui::SliderFloat("Rotation angle", &values::angle, -glm::pi<float>(), +glm::pi<float>());
-    ImGui::SliderFloat("Scale", &values::scale, -10.0f, +10.0f);
-    if (ImGui::Button("Quit")) {
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-    ImGui::End();
-
-    // End ImGui Frame
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-}
 
 // Importing 3D Obj File Parameters
 struct Vertex {
@@ -179,6 +193,123 @@ struct Mesh {
     std::vector<unsigned int> indices;
     unsigned int textureID;  // To store texture ID for the mesh
 };
+
+// Additional Skybox Code
+float skyboxVertices[] = {
+
+        // Right face
+        1.0f, -1.0f, -1.0f,
+        1.0f,  1.0f, -1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f,
+        1.0f, -1.0f, -1.0f,
+
+        // Left face
+       -1.0f, -1.0f, -1.0f,
+       -1.0f, -1.0f,  1.0f,
+       -1.0f,  1.0f,  1.0f,
+       -1.0f,  1.0f,  1.0f,
+       -1.0f,  1.0f, -1.0f,
+       -1.0f, -1.0f, -1.0f,
+
+       // Top face
+       -1.0f,  1.0f, -1.0f,
+        1.0f,  1.0f, -1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+       -1.0f,  1.0f,  1.0f,
+       -1.0f,  1.0f, -1.0f,
+
+       // Bottom face
+       -1.0f, -1.0f, -1.0f,
+       -1.0f, -1.0f,  1.0f,
+        1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+       -1.0f, -1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f,
+
+        // Front face
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        // Back face
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f
+
+};
+
+GLuint LoadCubemap(const std::vector<std::string>& faces) {
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    for (unsigned int i = 0; i < faces.size(); i++) {
+        FREE_IMAGE_FORMAT format = FreeImage_GetFileType(faces[i].c_str());
+        FIBITMAP* image = FreeImage_Load(format, faces[i].c_str());
+        if (!image) {
+            std::cerr << "Failed to load cubemap texture at path: " << faces[i] << std::endl;
+            continue;
+        }
+
+        FIBITMAP* image32bit = FreeImage_ConvertTo32Bits(image);
+        FreeImage_FlipVertical(image32bit);  // Flip the image vertically
+        unsigned char* data = FreeImage_GetBits(image32bit);
+
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA,
+            FreeImage_GetWidth(image32bit), FreeImage_GetHeight(image32bit),
+            0, GL_BGRA, GL_UNSIGNED_BYTE, data);
+
+        FreeImage_Unload(image32bit);
+        FreeImage_Unload(image);
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
+}
+// Function to load a cubemap texture
+//GLuint LoadCubemap(const std::vector<std::string>& faces) {
+//    GLuint textureID;
+//    glGenTextures(1, &textureID);
+//    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+//
+//    for (unsigned int i = 0; i < faces.size(); i++) {
+//        FREE_IMAGE_FORMAT format = FreeImage_GetFileType(faces[i].c_str());
+//        FIBITMAP* image = FreeImage_Load(format, faces[i].c_str());
+//        if (!image) {
+//            std::cerr << "Failed to load cubemap texture at path: " << faces[i] << std::endl;
+//        }
+//        else {
+//            std::cout << "Successfully loaded: " << faces[i] << std::endl;
+//        }
+//
+//        FIBITMAP* image32bit = FreeImage_ConvertTo32Bits(image);
+//        unsigned char* data = FreeImage_GetBits(image32bit);
+//        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, FreeImage_GetWidth(image32bit), FreeImage_GetHeight(image32bit), 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
+//        FreeImage_Unload(image32bit);
+//        FreeImage_Unload(image);
+//    }
+//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+//
+//    return textureID;
+//}
 
 GLuint LoadTexture(const std::string& path) {
     FREE_IMAGE_FORMAT format = FreeImage_GetFileType(path.c_str());
@@ -398,6 +529,14 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
     glLinkProgram(program);
     glValidateProgram(program);
 
+    GLint success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+    }
+
     glDeleteShader(vs);
     glDeleteShader(fs);
 
@@ -411,7 +550,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     {
         height = 1;
     }
-    values::windowAspectRatio = (float)width / (float)height;
+    windowAspectRatio = (float)width / (float)height;
     std::cout << "frame size changed!" << std::endl;
 }
 
@@ -439,12 +578,35 @@ int main() {
     glfwSetCursorPosCallback(window, mouse_callback);  
     glfwSetKeyCallback(window, key_callback);
 
+    glEnable(GL_DEPTH_TEST);
+
+    // Skybox setup
+    GLuint skyboxVAO, skyboxVBO;
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glBindVertexArray(0);
+
+    std::vector<std::string> faces = {
+        "assets/right.jpg",
+        "assets/left.jpg",
+        "assets/top.jpg",
+        "assets/bottom.jpg",
+        "assets/front.jpg",
+        "assets/back.jpg"
+    };
+    GLuint cubemapTexture = LoadCubemap(faces);
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
-    glEnable(GL_DEPTH_TEST);
+    
    
 
     std::vector<Mesh> meshes = LoadModel("assets/snowman.obj");
@@ -452,6 +614,8 @@ int main() {
     // Prepare shaders
     ShaderProgramSource source = ParseShader("shaders/shader_final.glsl");
     unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
+
+    glUseProgram(shader);
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -461,25 +625,48 @@ int main() {
         glClearColor(0.0f, 0.0f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glUseProgram(shader);
-
         // Pass uniforms to the shader program
         glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
         glm::vec3 cameraPos(0.0f, 2.5f, 10.0f);
 
         glm::mat4 T = glm::translate(glm::vec3(0.0f, 0.0f, 0.0f));
-        glm::mat4 R = glm::rotate(values::angle, glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 S = glm::scale(glm::vec3(values::scale * 1.0f));
-
-        draw_gui(window);
+        glm::mat4 R = glm::rotate(angle, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 S = glm::scale(glm::vec3(scale * 1.0f));
+       glm::mat4 s_sky = glm::scale(glm::vec3(scale * 500.0f));
 
         glm::mat4 model = T * R * S;
-        glm::mat4 view = glm::lookAt(position, position + front, up);
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), values::windowAspectRatio, 0.1f, 100.0f);
+        glm::mat4 view;
+        
+        if (isFpp == 1)
+        {
+            view = glm::lookAt(position, position + front, up);
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            
+        }
+        else
+        {
+            view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        }
+        
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), windowAspectRatio, 0.01f, 1000.0f);
+        glDepthFunc(GL_LEQUAL);  // Draw skybox last
+        glUniform1i(glGetUniformLocation(shader, "isSkybox"), true);  // Set skybox mode
 
-        // Render all meshes
-        glUseProgram(shader);
+        glm::mat4 viewNoTranslation = glm::mat4(glm::mat3(view));  // Remove translation part
+        glUniformMatrix4fv(glGetUniformLocation(shader, "uView"), 1, GL_FALSE, glm::value_ptr(s_sky*viewNoTranslation));
+        glUniformMatrix4fv(glGetUniformLocation(shader, "uProjection"), 1, GL_FALSE, glm::value_ptr(projection));
 
+        glBindVertexArray(skyboxVAO);
+        glActiveTexture(GL_TEXTURE1); // Use texture unit 1 for the skybox
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glUniform1i(glGetUniformLocation(shader, "skybox"), 1); // Pass texture unit 1 to the shader
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+        glDepthFunc(GL_LESS);  // Reset depth function
+
+
+        glUniform1i(glGetUniformLocation(shader, "isSkybox"), false);  // Set normal mesh mode
         glUniformMatrix4fv(glGetUniformLocation(shader, "uModel"), 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(glGetUniformLocation(shader, "uView"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(shader, "uProjection"), 1, GL_FALSE, glm::value_ptr(projection));
@@ -509,10 +696,15 @@ int main() {
             glBindVertexArray(0);
         }
 
+        draw_gui(window);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
     glDeleteProgram(shader);
+    glDeleteVertexArrays(1, &skyboxVAO);
+    glDeleteBuffers(1, &skyboxVBO);
+    glDeleteTextures(1, &cubemapTexture);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
