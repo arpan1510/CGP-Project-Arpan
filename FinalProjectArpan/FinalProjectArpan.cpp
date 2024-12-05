@@ -445,6 +445,7 @@ int main() {
     ImGui_ImplOpenGL3_Init("#version 150");
 
     glEnable(GL_DEPTH_TEST);
+   
 
     std::vector<Mesh> meshes = LoadModel("assets/snowman.obj");
 

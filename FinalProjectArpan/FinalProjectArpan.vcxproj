@@ -119,7 +119,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>assimp-vc143-mt.lib;FreeImage.lib;glew32.lib;glfw3dll.lib;opengl32.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openal32.lib;sfml-main.lib;sfml-network.lib;sfml-system.lib;sfml-window.lib;sfml-audio.lib;sfml-graphics.lib;assimp-vc143-mt.lib;FreeImage.lib;glew32.lib;glfw3dll.lib;opengl32.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y "$(TargetDir)$(TargetName).exe" "$(ProjectDir)dist\"
@@ -146,7 +146,7 @@ xcopy /Y "$(ProjectDir)assets\*" "$(ProjectDir)dist\assets\"</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>assimp-vc143-mt.lib;FreeImage.lib;glew32.lib;glfw3dll.lib;opengl32.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openal32.lib;sfml-main.lib;sfml-network.lib;sfml-system.lib;sfml-window.lib;sfml-audio.lib;sfml-graphics.lib;assimp-vc143-mt.lib;FreeImage.lib;glew32.lib;glfw3dll.lib;opengl32.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y "$(TargetDir)$(TargetName).exe" "$(ProjectDir)dist\"
